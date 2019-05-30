@@ -2,7 +2,7 @@
 
 by: zaicheng wang
 
-Mode info at: https://coderecipe.ai/architectures/86530220?query=big%20data
+Mode info at: https://coderecipe.ai/architectures/86530220
 
 
 ### Prerequisites
