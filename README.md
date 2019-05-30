@@ -6,11 +6,8 @@ Mode info at: https://coderecipe.ai/architectures/86530220
 
 
 ### Prerequisites
-```  
-npm install serverless
-npm install serverless-pseudo-parameters
-```  
-Make sure you have AWS access key and secrete keys setup locally, following this video [here](https://www.youtube.com/watch?v=KngM5bfpttA)
+
+Make sure you have AWS access key and secrete keys setup locally, following this video [here](https://www.youtube.com/watch?v=_f0d2pLJjiA)
 
 ### Download the code locally
 
@@ -23,7 +20,8 @@ serverless create --template-url {} --path AWS-bigdata-pipeline
 ```
 cd AWS-bigdata-pipeline
 
-npm install
+npm install serverless
+npm install serverless-pseudo-parameters
 
 serverless deploy --stage <your-stage-name>
 ```
