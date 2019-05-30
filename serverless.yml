@@ -1,0 +1,146 @@
+
+service: data-pipeline
+
+plugins:
+  - serverless-pseudo-parameters
+
+custom:
+  bucket: big-data-pipeline-data-lake-#{AWS::AccountId}-${self:provider.region}
+  query-results: big-data-pipeline-query-results-#{AWS::AccountId}-${self:provider.region}
+  database: testdb
+  table: testcsvtable
+
+provider:
+  name: aws
+  runtime: python3.7
+  stage: dev
+  region: us-east-1
+  environment:
+    FUNCTION_ARN: "arn:aws:lambda:${self:provider.region}:#{AWS::AccountId}:function:${self:service}-${self:provider.stage}-jsonToCsv"
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - s3:PutObject
+        - s3:PutObjectAcl
+      Resource: "arn:aws:s3:::${self:custom.bucket}/*"
+
+functions:
+  jsonToCsv:
+    handler: converter.json_to_csv
+    timeout: 60
+
+resources:
+ Resources:
+  DataLakeBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+     BucketName: ${self:custom.bucket}
+  QueryResultsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+     BucketName: ${self:custom.query-results}
+  AWSGlueDataCataLog:
+    Type: AWS::Glue::Database
+    Properties:
+     CatalogId: !Ref AWS::AccountId
+     DatabaseInput:
+      Name: ${self:custom.database}
+      Description: Database for testing
+  AWSGlueTable1:
+    DependsOn: AWSGlueDataCataLog
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref AWSGlueDataCataLog
+      TableInput:
+        Name: ${self:custom.table}
+        Description: Test table
+        TableType: EXTERNAL_TABLE
+        Parameters: {
+    "classification": "csv"
+  }
+        StorageDescriptor:
+          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+          Columns:
+          - Name: year
+            Type: int
+          - Name: month
+            Type: int
+          - Name: sale_units
+            Type: int
+          - Name: sale_amount
+            Type: double
+          InputFormat: org.apache.hadoop.mapred.TextInputFormat
+          Location: s3://${self:custom.bucket}/
+          SerdeInfo:
+            Parameters:
+              field.delim: ","
+            SerializationLibrary: org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe
+  Deliverystream:
+    DependsOn:
+      - deliveryPolicy
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      ExtendedS3DestinationConfiguration:
+        BucketARN: !Join
+          - ''
+          - - 'arn:aws:s3:::'
+            - !Ref DataLakeBucket
+        BufferingHints:
+          IntervalInSeconds: '60'
+          SizeInMBs: '50'
+        CompressionFormat: UNCOMPRESSED
+        Prefix: firehose/
+        RoleARN: !GetAtt deliveryRole.Arn
+        ProcessingConfiguration:
+          Enabled: 'true'
+          Processors:
+            - Parameters:
+                - ParameterName: LambdaArn
+                  ParameterValue: ${self:provider.environment.FUNCTION_ARN}
+              Type: Lambda
+  deliveryRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: firehose.amazonaws.com
+            Action: 'sts:AssumeRole'
+            Condition:
+              StringEquals:
+                'sts:ExternalId': !Ref 'AWS::AccountId'
+  deliveryPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: firehose_delivery_policy
+      PolicyDocument:
+#        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 's3:AbortMultipartUpload'
+              - 's3:GetBucketLocation'
+              - 's3:GetObject'
+              - 's3:ListBucket'
+              - 's3:ListBucketMultipartUploads'
+              - 's3:PutObject'
+            Resource:
+              - !Join
+                - ''
+                - - 'arn:aws:s3:::'
+                  - !Ref DataLakeBucket
+              - !Join
+                - ''
+                - - 'arn:aws:s3:::'
+                  - !Ref DataLakeBucket
+                  - '*'
+          - Effect: Allow
+            Action:
+              - 'lambda:InvokeFunction'
+            Resource:
+              ${self:provider.environment.FUNCTION_ARN}
+      Roles:
+        - !Ref deliveryRole

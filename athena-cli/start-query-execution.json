@@ -1,0 +1,9 @@
+{
+    "QueryString": "SELECT * FROM \"testdb\".\"testcsvtable\" limit 10;",
+    "QueryExecutionContext": {
+        "Database": "testdb"
+    },
+    "ResultConfiguration": {
+        "OutputLocation": "s3://big-data-pipeline-query-results-331409302759-us-east-1/"
+    }
+}
